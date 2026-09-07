@@ -1,0 +1,4 @@
+import type { Model } from '../types/chat';
+const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+export function parseModels(value: unknown): Model[] { if (!value || typeof value !== 'object') return []; const data = (value as { data?: unknown }).data; if (!Array.isArray(data)) return []; return data.flatMap(item => item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string' ? [{ id: (item as { id: string }).id, name: typeof (item as { name?: unknown }).name === 'string' ? (item as { name: string }).name : (item as { id: string }).id }] : []); }
+export async function fetchModels(signal?: AbortSignal): Promise<Model[]> { const response = await fetch(`${base}/api/models`, { signal }); if (!response.ok) throw new Error('Model discovery failed'); return parseModels(await response.json()); }

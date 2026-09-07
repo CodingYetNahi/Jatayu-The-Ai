@@ -1,0 +1,8 @@
+name = "jatayu-api"
+main = "worker/src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+ALLOWED_ORIGIN = "http://localhost:5173"
+# Set OMNIROUTE_BASE_URL here for deployment, and OMNIROUTE_API_KEY with:
+# npx wrangler secret put OMNIROUTE_API_KEY

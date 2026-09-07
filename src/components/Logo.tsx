@@ -1,0 +1,1 @@
+export function Logo({ compact = false }: { compact?: boolean }) { return <div className="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 23c9-1 13-8 16-17 2 8 7 13 14 15-7 1-12 5-15 13-2-6-7-10-15-11Z"/><path d="M12 23c5-1 8-4 10-9 1 5 4 8 8 9-5 1-8 3-10 7-1-4-4-6-8-7Z" className="logo-cut"/></svg>{!compact && <span>Jatayu <b>The Ai</b></span>}</div> }

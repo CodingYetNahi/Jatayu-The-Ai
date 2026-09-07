@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +18,8 @@ if (!externalOmniRoute) {
   const bin = process.platform === 'win32'
     ? path.join(root, 'node_modules', '.bin', 'omniroute.cmd')
     : path.join(root, 'node_modules', '.bin', 'omniroute');
+  const jwtSecret = process.env.JWT_SECRET || randomBytes(48).toString('base64url');
+  const apiKeySecret = process.env.API_KEY_SECRET || randomBytes(32).toString('hex');
 
   omniProcess = spawn(bin, ['--port', String(omniroutePort)], {
     cwd: root,
@@ -28,6 +31,8 @@ if (!externalOmniRoute) {
       REQUIRE_API_KEY: process.env.OMNIROUTE_REQUIRE_API_KEY || 'false',
       AUTH_COOKIE_SECURE: process.env.AUTH_COOKIE_SECURE || 'false',
       DATA_DIR: process.env.OMNIROUTE_DATA_DIR || path.join(root, '.omniroute-data'),
+      JWT_SECRET: jwtSecret,
+      API_KEY_SECRET: apiKeySecret,
     },
   });
 
@@ -49,13 +54,8 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    if (url.pathname === '/api/models' && req.method === 'GET') {
-      return proxy(req, res, '/v1/models');
-    }
-
-    if (url.pathname === '/api/chat' && req.method === 'POST') {
-      return proxy(req, res, '/v1/chat/completions', true);
-    }
+    if (url.pathname === '/api/models' && req.method === 'GET') return proxy(req, res, '/v1/models');
+    if (url.pathname === '/api/chat' && req.method === 'POST') return proxy(req, res, '/v1/chat/completions', true);
 
     return serveStatic(url.pathname, res);
   } catch (error) {
@@ -127,7 +127,9 @@ async function probeOmniRoute() {
 
 function serveStatic(requestPath, res) {
   if (!fs.existsSync(dist)) return json(res, 503, { error: { message: 'Frontend build not found. Run npm run build first.' } });
-  const safePath = requestPath === '/' ? 'index.html' : requestPath.replace(/^\/+/, '');
+  const repoPrefix = '/Jatayu-The-Ai/';
+  const normalized = requestPath.startsWith(repoPrefix) ? requestPath.slice(repoPrefix.length) : requestPath.replace(/^\/+/, '');
+  const safePath = normalized === '' || normalized === '/' ? 'index.html' : normalized;
   let file = path.join(dist, safePath);
   if (!file.startsWith(dist)) return json(res, 403, { error: { message: 'Forbidden' } });
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dist, 'index.html');

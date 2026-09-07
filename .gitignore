@@ -4,6 +4,7 @@ dist/
 .env.*
 !.env.example
 .wrangler/
+.omniroute-data/
 coverage/
 *.log
 .DS_Store

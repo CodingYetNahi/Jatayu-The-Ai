@@ -1,0 +1,5 @@
+import { BookOpen, Code2, Feather, FileText, HelpCircle, Lightbulb } from 'lucide-react';
+const suggestions = [
+  ['Explain something', 'Explain a complex topic to me in simple terms.', BookOpen], ['Write something', 'Help me draft a clear, engaging piece of writing.', Feather], ['Help me code', 'Help me solve a programming problem step by step.', Code2], ['Summarize text', 'Summarize the following text and highlight the key points:\n\n', FileText], ['Brainstorm ideas', 'Brainstorm creative ideas for a project I am planning.', Lightbulb], ['Ask a question', 'I have a general question:', HelpCircle],
+] as const;
+export function Welcome({ onChoose }: { onChoose: (prompt: string) => void }) { return <section className="welcome"><div className="welcome-mark" aria-hidden="true">✦</div><p className="eyebrow">YOUR THOUGHTFUL AI COMPANION</p><h1>How can Jatayu help you today?</h1><p className="welcome-copy">Ask, create, explore, or solve — routed to the right intelligence for the task.</p><div className="suggestions">{suggestions.map(([title, prompt, Icon]) => <button key={title} onClick={() => onChoose(prompt)}><Icon/><span>{title}</span></button>)}</div></section> }

@@ -1,0 +1,3 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'; import { streamChat } from './chat';
+afterEach(() => vi.unstubAllGlobals());
+describe('request cancellation', () => { it('reports an aborted request', async () => { const controller = new AbortController(); vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise((_resolve,reject) => { init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted','AbortError'))); }))); const promise = streamChat({model:'auto',messages:[{role:'user',content:'hi'}],signal:controller.signal,onToken:()=>undefined}); controller.abort(); await expect(promise).rejects.toMatchObject({code:'aborted'}); }); });

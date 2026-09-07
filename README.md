@@ -1,114 +1,132 @@
 # Jatayu The Ai
 
-Jatayu The Ai is a responsive, installable AI chat client with local conversation history and streamed answers. It uses a secure Cloudflare Worker adapter to reach an [OmniRoute](https://github.com/diegosouzapw/OmniRoute) deployment through its OpenAI-compatible API. The browser never receives the OmniRoute credential or privileged upstream URL.
+Jatayu The Ai is a responsive AI chat application built with React, TypeScript and Vite. It now integrates the open-source [OmniRoute](https://github.com/diegosouzapw/OmniRoute) gateway directly as a runtime dependency so Jatayu can run as one full-stack Node service instead of requiring a separately coded AI proxy.
 
-## Architecture
+## Why the GitHub Pages chat previously failed
+
+GitHub Pages only serves static files. The frontend calls `/api/chat` and `/api/models`, but Pages cannot execute those API routes. The earlier architecture expected a separately deployed Worker plus a separately deployed OmniRoute server. If `VITE_API_BASE_URL` was not configured to that backend, the browser called the GitHub Pages origin itself and received an error.
+
+The repository now supports two deployment modes:
 
 ```text
-Browser (React/Vite on GitHub Pages)
-  -> HTTPS /api/chat or /api/models
-Cloudflare Worker (validation, CORS, limits, secrets)
-  -> /v1/chat/completions or /v1/models
-OmniRoute -> selected available provider -> streamed SSE response
+Recommended full-stack mode
+Browser
+  -> Jatayu Node server :8080
+      -> /api/chat and /api/models
+      -> embedded OmniRoute runtime :20128
+      -> available AI provider/model
+
+Optional static Pages mode
+GitHub Pages frontend
+  -> VITE_API_BASE_URL
+      -> separately hosted Jatayu/OmniRoute backend
 ```
 
-The UI defaults to `model: "auto"`. `src/api` owns browser transport, while `worker/src/index.ts` is the provider-neutral security boundary. Conversations and theme preference stay in browser local storage. Markdown is rendered as a React tree; embedded raw HTML is skipped. A future retrieval implementation can implement `SearchProvider` in `src/services/search.ts`; no browsing or citations are simulated today.
+## OmniRoute integration
 
-## Requirements and local development
+The npm package `omniroute@3.8.50` is a production dependency. `server/jatayu-server.mjs` can start the installed OmniRoute runtime automatically and proxy Jatayu's same-origin API routes to OmniRoute's OpenAI-compatible endpoints:
 
-- Node.js 22 or newer
+- `GET /api/models` -> OmniRoute `GET /v1/models`
+- `POST /api/chat` -> OmniRoute `POST /v1/chat/completions`
+- `GET /api/health` -> verifies OmniRoute is reachable
+
+By default the embedded OmniRoute instance runs only on `127.0.0.1:20128`; Jatayu is the public-facing process. If `OMNIROUTE_BASE_URL` is set, Jatayu uses that external OmniRoute instance instead of starting its own.
+
+## Requirements
+
+- Node.js 22+
 - npm 10+
-- A running OmniRoute-compatible server
+
+## Run locally as one full-stack app
 
 ```bash
 npm install
-cp .env.example .env
-npm run dev
+VITE_BASE_PATH=/ npm run build
+npm run start:fullstack
 ```
 
-In a second terminal, start the API adapter:
+Then open:
+
+```text
+http://localhost:8080
+```
+
+Health check:
+
+```text
+http://localhost:8080/api/health
+```
+
+OmniRoute supports multiple provider types, including no-auth/free providers, OAuth providers and API-key providers. Provider availability, quotas and upstream terms can change. Configure or enable the providers you want through OmniRoute as appropriate.
+
+## Docker deployment
+
+The included `Dockerfile` builds the frontend and launches Jatayu with the integrated OmniRoute runtime:
 
 ```bash
-export OMNIROUTE_BASE_URL=http://localhost:8080
-export OMNIROUTE_API_KEY=your-local-key
-export ALLOWED_ORIGIN=http://localhost:5173
-npx wrangler dev
+docker build -t jatayu-the-ai .
+docker run --rm -p 8080:8080 -v jatayu-omniroute:/data/omniroute jatayu-the-ai
 ```
 
-Set `VITE_API_BASE_URL=http://localhost:8787` in `.env`. This value is intentionally public and must point to the adapter—not OmniRoute.
-
-## OmniRoute setup
-
-Follow OmniRoute's upstream README to clone it, configure its provider keys on the server, install its dependencies, and launch it. Confirm that its OpenAI-compatible `/v1/models` and `/v1/chat/completions` endpoints are reachable from the Worker. For a remote instance, set `OMNIROUTE_BASE_URL` to its HTTPS origin (without `/v1`) and store its access token as `OMNIROUTE_API_KEY`. Provider keys belong only in OmniRoute's environment.
+For a persistent production deployment, set fixed strong values for `JWT_SECRET` and `API_KEY_SECRET` rather than relying on per-process generated development values.
 
 ## Environment variables
 
-| Variable | Location | Purpose |
-|---|---|---|
-| `VITE_API_BASE_URL` | Frontend build | Public origin of the secure adapter |
-| `VITE_BASE_PATH` | Frontend build | Optional Pages base; defaults to `/Jatayu-The-Ai/` |
-| `OMNIROUTE_BASE_URL` | Worker | Private OmniRoute origin |
-| `OMNIROUTE_API_KEY` | Worker secret | OmniRoute bearer credential |
-| `ALLOWED_ORIGIN` | Worker | Exact permitted frontend origin |
+| Variable | Purpose |
+|---|---|
+| `PORT` / `JATAYU_PORT` | Public Jatayu server port, default `8080` |
+| `OMNIROUTE_PORT` | Embedded OmniRoute port, default `20128` |
+| `OMNIROUTE_DATA_DIR` | Persistent OmniRoute data directory |
+| `OMNIROUTE_BASE_URL` | Optional external OmniRoute URL; disables embedded startup |
+| `OMNIROUTE_API_KEY` | Optional bearer key for a protected external OmniRoute server |
+| `OMNIROUTE_REQUIRE_API_KEY` | Embedded OmniRoute `/v1` auth mode; default `false` because it binds to loopback |
+| `JWT_SECRET` | OmniRoute dashboard/session signing secret |
+| `API_KEY_SECRET` | OmniRoute API-key encryption secret |
+| `VITE_API_BASE_URL` | Frontend API origin; blank means same origin |
+| `VITE_BASE_PATH` | Frontend asset base; `/` for full-stack, `/Jatayu-The-Ai/` for Pages |
 
-Never prefix a secret with `VITE_`: Vite embeds such variables in public JavaScript.
+Never put provider credentials or OmniRoute secrets in `VITE_*` variables because Vite embeds them into browser JavaScript.
 
-## Validation and production builds
+## GitHub Pages
+
+GitHub Pages remains useful as a static frontend, but it cannot run OmniRoute or the Jatayu Node server. The Pages workflow builds with `/Jatayu-The-Ai/` as the asset base. For chat to work on that static URL, define the repository variable `VITE_API_BASE_URL` as the HTTPS URL of a deployed Jatayu full-stack/backend service.
+
+If no backend URL is configured, the UI can load but AI requests cannot succeed. This is a GitHub Pages platform limitation, not a frontend rendering problem.
+
+## Optional Cloudflare Worker adapter
+
+`worker/src/index.ts` is retained as an alternative adapter for users who already run OmniRoute elsewhere. It is no longer the only supported backend architecture.
+
+## Validation
 
 ```bash
 npm run typecheck
 npm test
 npm run build
-npm run preview
 ```
-
-## Deploy the backend
-
-Cloudflare Workers has a free tier. Review `wrangler.toml`, set the production Pages origin and upstream URL, then store the key and deploy:
-
-```bash
-npx wrangler secret put OMNIROUTE_API_KEY
-npx wrangler deploy
-```
-
-For production, enable a Workers Rate Limiting binding named `RATE_LIMITER` or put equivalent limits in front of the Worker. The adapter already enforces exact-origin CORS, message shape/count limits, per-message limits, a 128 KB declared request cap, safe errors, and `no-store` responses. Keep OmniRoute private where practical and rotate leaked credentials.
-
-## Deploy the frontend to GitHub Pages
-
-The workflow in `.github/workflows/deploy.yml` installs the pinned direct dependencies, then runs typecheck, tests, and build before deploying `dist`. The repository slug is `Jatayu-The-Ai`, so Vite uses `/Jatayu-The-Ai/`. In repository settings, choose **GitHub Actions** as the Pages source and define the non-secret repository variable `VITE_API_BASE_URL` with the deployed Worker origin. No backend secrets are used in this workflow.
 
 ## Project structure
 
 ```text
-src/api           frontend chat/model transport and parsing
-src/components    accessible chat interface components
-src/config        single assistant prompt definition
-src/hooks         theme behavior
-src/services      future provider contracts
-src/stores        validated local persistence
-src/types         shared domain types
-src/utils         message utilities
-worker/src        Cloudflare Worker security adapter
-public            PWA manifest, original icon, service worker
+src/                    React/Vite chatbot frontend
+server/jatayu-server.mjs Full-stack Node server and OmniRoute integration
+worker/src/              Optional Cloudflare Worker adapter
+public/                  PWA assets
+Dockerfile               Single-service full-stack deployment
+THIRD_PARTY_NOTICES.md   Open-source attribution
 ```
 
 ## Security notes
 
-- Treat frontend code and `VITE_*` variables as public.
-- Use HTTPS for both deployed adapter and OmniRoute.
-- Configure `ALLOWED_ORIGIN` exactly; do not use `*` with privileged APIs.
-- The service worker bypasses `/api/` and never caches AI responses.
-- Raw model output is not interpreted as HTML. Links open with `noopener noreferrer`.
-- Local conversation data is not encrypted; do not enter sensitive information on a shared device.
-- Run `npm audit` regularly and review dependency updates before merging.
+- Embedded OmniRoute binds to loopback by default; expose Jatayu, not port 20128.
+- Use HTTPS in production.
+- Persist OmniRoute data on a protected volume.
+- Use fixed strong `JWT_SECRET` and `API_KEY_SECRET` values for persistent deployments.
+- If using an external protected OmniRoute instance, keep `OMNIROUTE_API_KEY` server-side only.
+- Do not commit `.env`, provider keys or generated OmniRoute data.
 
-## Troubleshooting
+## Third-party attribution
 
-- **“couldn’t reach the AI service”**: verify the Worker URL, deployment status, HTTPS, and browser network panel.
-- **403 Origin not allowed**: make `ALLOWED_ORIGIN` exactly match the Pages origin, including scheme and without a trailing slash.
-- **Model list unavailable**: chat remains functional with Auto; inspect Worker and OmniRoute `/v1/models` logs.
-- **Authentication error**: reset the Worker secret and verify OmniRoute's expected bearer token.
-- **Pages assets 404**: keep `VITE_BASE_PATH=/Jatayu-The-Ai/`, or change it to the actual repository slug including leading/trailing slashes.
-- **Local CORS failure**: use `http://localhost:5173` for `ALLOWED_ORIGIN` and access Vite using that same host.
+Jatayu The Ai integrates **OmniRoute**, created and maintained by `diegosouzapw` and contributors, under the **MIT License**. Upstream project: https://github.com/diegosouzapw/OmniRoute
 
-Optional next steps include a real search provider, authenticated encrypted sync, an attachment-processing backend, richer syntax highlighting, and browser-native voice input.
+See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) for the attribution notice. Jatayu The Ai is an independent project and is not represented as an official OmniRoute product.

@@ -2,6 +2,8 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 COPY package.json ./
 RUN npm install
+COPY server/package.json ./server/package.json
+RUN npm install --prefix server
 COPY . .
 ENV VITE_BASE_PATH=/
 RUN npm run build

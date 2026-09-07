@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim
 WORKDIR /app
 COPY package.json ./
-RUN npm install --ignore-scripts
+RUN npm install
 COPY . .
 ENV VITE_BASE_PATH=/
 RUN npm run build

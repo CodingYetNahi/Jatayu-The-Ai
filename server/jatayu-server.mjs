@@ -16,13 +16,13 @@ let omniProcess;
 
 if (!externalOmniRoute) {
   const bin = process.platform === 'win32'
-    ? path.join(root, 'node_modules', '.bin', 'omniroute.cmd')
-    : path.join(root, 'node_modules', '.bin', 'omniroute');
+    ? path.join(__dirname, 'node_modules', '.bin', 'omniroute.cmd')
+    : path.join(__dirname, 'node_modules', '.bin', 'omniroute');
   const jwtSecret = process.env.JWT_SECRET || randomBytes(48).toString('base64url');
   const apiKeySecret = process.env.API_KEY_SECRET || randomBytes(32).toString('hex');
 
   omniProcess = spawn(bin, ['--port', String(omniroutePort)], {
-    cwd: root,
+    cwd: __dirname,
     stdio: 'inherit',
     env: {
       ...process.env,
